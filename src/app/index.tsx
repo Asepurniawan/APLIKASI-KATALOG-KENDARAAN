@@ -8,9 +8,10 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { WebBadge } from '@/components/web-badge';
 import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
+import React from 'react';
 
 function getDevMenuHint() {
-  if (Platform.OS === 'WEB ') {
+  if (Platform.OS === 'web') {
     return <ThemedText type="small">use browser devtools</ThemedText>;
   }
   if (Device.isDevice) {
