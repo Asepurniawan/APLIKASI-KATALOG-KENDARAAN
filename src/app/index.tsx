@@ -29,7 +29,7 @@ const vehicles: Vehicle[] = [
     brand: "Honda",
     type: "Motor",
     price: 37900000,
-    description: "Motor sport full-fairing untuk penggunaan harian.",
+    description: "Motor sport full-fairing untuk penggunaan hari.",
     imageUrl:
       "https://commons.wikimedia.org/wiki/Special:FilePath/2021_Honda_CBR150R_ABS.jpg?width=1200",
   },
