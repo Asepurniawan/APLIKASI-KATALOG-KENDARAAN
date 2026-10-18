@@ -204,6 +204,7 @@ export default function DealerKatalog() {
 
   return (
     <View style={styles.container}>
+      <Text style={styles.eyebrow}>DEALER KENDARAAN</Text>
       <Text style={styles.title}>Hantu Car</Text>
       <Text style={styles.subtitle}>Katalog motor dan mobil pilihan</Text>
 
@@ -237,6 +238,10 @@ export default function DealerKatalog() {
         ))}
       </View>
 
+      <Text style={styles.resultCount}>
+        {filteredVehicles.length} kendaraan tersedia
+      </Text>
+
       <FlatList
         data={filteredVehicles}
         keyExtractor={(item) => item.id}
@@ -254,9 +259,19 @@ export default function DealerKatalog() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    alignSelf: "center",
     backgroundColor: "#f8fafc",
     paddingTop: 56,
     paddingHorizontal: 16,
+    width: "100%",
+    maxWidth: 760,
+  },
+  eyebrow: {
+    color: "#2563eb",
+    fontSize: 12,
+    fontWeight: "800",
+    letterSpacing: 1.4,
+    marginBottom: 6,
   },
   title: {
     color: "#0f172a",
@@ -303,7 +318,13 @@ const styles = StyleSheet.create({
     color: "#ffffff",
   },
   list: {
-    paddingBottom: 24,
+    paddingBottom: 96,
+  },
+  resultCount: {
+    color: "#64748b",
+    fontSize: 13,
+    fontWeight: "600",
+    marginBottom: 10,
   },
   card: {
     backgroundColor: "#ffffff",
