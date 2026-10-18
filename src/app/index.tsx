@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import {
-  Alert,
   FlatList,
   Image,
   Pressable,
@@ -108,6 +108,8 @@ const vehicles: Vehicle[] = [
 const formatRupiah = (value: number) => `Rp ${value.toLocaleString("id-ID")}`;
 
 export default function DealerKatalog() {
+  const router = useRouter();
+  const { vehicleId } = useLocalSearchParams<{ vehicleId?: string }>();
   const [selectedType, setSelectedType] = useState<VehicleType | "Semua">(
     "Semua",
   );
@@ -130,6 +132,51 @@ export default function DealerKatalog() {
     );
   }, [search, selectedType]);
 
+  const selectedVehicle =
+    typeof vehicleId === "string"
+      ? vehicles.find((vehicle) => vehicle.id === vehicleId)
+      : undefined;
+
+  const returnToCatalog = () => {
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+
+    router.replace("/");
+  };
+
+  if (selectedVehicle) {
+    return (
+      <View style={styles.container}>
+        <Pressable
+          accessibilityRole="button"
+          onPress={returnToCatalog}
+          style={styles.backButton}
+        >
+          <Text style={styles.backButtonText}>‹ Kembali ke katalog</Text>
+        </Pressable>
+        <Text style={styles.title}>{selectedVehicle.name}</Text>
+        <Text style={styles.subtitle}>{selectedVehicle.brand}</Text>
+        <View style={styles.card}>
+          <Image
+            source={{ uri: selectedVehicle.imageUrl }}
+            style={styles.cardImage}
+          />
+          <View style={styles.cardContent}>
+            <Text style={styles.typeTag}>{selectedVehicle.type}</Text>
+            <Text style={styles.description}>
+              {selectedVehicle.description}
+            </Text>
+            <Text style={styles.price}>
+              {formatRupiah(selectedVehicle.price)}
+            </Text>
+          </View>
+        </View>
+      </View>
+    );
+  }
+
   const renderVehicle = ({ item }: { item: Vehicle }) => (
     <View style={styles.card}>
       <Image source={{ uri: item.imageUrl }} style={styles.cardImage} />
@@ -146,13 +193,10 @@ export default function DealerKatalog() {
         <Pressable
           style={styles.detailButton}
           onPress={() =>
-            Alert.alert(
-              item.name,
-              `${item.description}\n\nHarga mulai: ${formatRupiah(item.price)}`,
-            )
+            router.push({ pathname: "/", params: { vehicleId: item.id } })
           }
         >
-          <Text style={styles.detailButtonText}>Lihat spesifikasi</Text>
+          <Text style={styles.detailButtonText}>Lihat detail</Text>
         </Pressable>
       </View>
     </View>
@@ -331,6 +375,16 @@ const styles = StyleSheet.create({
   detailButtonText: {
     color: "#ffffff",
     fontSize: 14,
+    fontWeight: "700",
+  },
+  backButton: {
+    alignSelf: "flex-start",
+    marginBottom: 16,
+    paddingVertical: 8,
+  },
+  backButtonText: {
+    color: "#2563eb",
+    fontSize: 16,
     fontWeight: "700",
   },
   emptyText: {
