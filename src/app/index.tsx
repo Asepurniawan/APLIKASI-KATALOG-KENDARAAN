@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Alert,
   FlatList,
@@ -112,19 +112,22 @@ export default function DealerKatalog() {
     "Semua",
   );
   const [search, setSearch] = useState("");
+  const [filteredVehicles, setFilteredVehicles] = useState(vehicles);
 
-  const filteredVehicles = useMemo(() => {
+  useEffect(() => {
     const normalizedSearch = search.trim().toLowerCase();
-    return vehicles.filter((vehicle) => {
-      const matchesType =
-        selectedType === "Semua" || vehicle.type === selectedType;
-      const matchesSearch =
-        !normalizedSearch ||
-        `${vehicle.brand} ${vehicle.name}`
-          .toLowerCase()
-          .includes(normalizedSearch);
-      return matchesType && matchesSearch;
-    });
+    setFilteredVehicles(
+      vehicles.filter((vehicle) => {
+        const matchesType =
+          selectedType === "Semua" || vehicle.type === selectedType;
+        const matchesSearch =
+          !normalizedSearch ||
+          `${vehicle.brand} ${vehicle.name}`
+            .toLowerCase()
+            .includes(normalizedSearch);
+        return matchesType && matchesSearch;
+      }),
+    );
   }, [search, selectedType]);
 
   const renderVehicle = ({ item }: { item: Vehicle }) => (
