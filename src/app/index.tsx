@@ -1,6 +1,6 @@
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import {
-  Alert,
   FlatList,
   Image,
   Pressable,
@@ -29,7 +29,7 @@ const vehicles: Vehicle[] = [
     brand: "Honda",
     type: "Motor",
     price: 37900000,
-    description: "Motor sport full-fairing untuk penggunaan harian.",
+    description: "Motor sport full-fairing untuk penggunaan hari.",
     imageUrl:
       "https://otomotifnet.gridoto.com/read/231124288/first-ride-all-new-honda-cbr150r-ini-daftar-kelebihannya",
   },
@@ -108,24 +108,74 @@ const vehicles: Vehicle[] = [
 const formatRupiah = (value: number) => `Rp ${value.toLocaleString("id-ID")}`;
 
 export default function DealerKatalog() {
+  const router = useRouter();
+  const { vehicleId } = useLocalSearchParams<{ vehicleId?: string }>();
   const [selectedType, setSelectedType] = useState<VehicleType | "Semua">(
     "Semua",
   );
   const [search, setSearch] = useState("");
+  const [filteredVehicles, setFilteredVehicles] = useState(vehicles);
 
-  const filteredVehicles = useMemo(() => {
+  useEffect(() => {
     const normalizedSearch = search.trim().toLowerCase();
-    return vehicles.filter((vehicle) => {
-      const matchesType =
-        selectedType === "Semua" || vehicle.type === selectedType;
-      const matchesSearch =
-        !normalizedSearch ||
-        `${vehicle.brand} ${vehicle.name}`
-          .toLowerCase()
-          .includes(normalizedSearch);
-      return matchesType && matchesSearch;
-    });
+    setFilteredVehicles(
+      vehicles.filter((vehicle) => {
+        const matchesType =
+          selectedType === "Semua" || vehicle.type === selectedType;
+        const matchesSearch =
+          !normalizedSearch ||
+          `${vehicle.brand} ${vehicle.name}`
+            .toLowerCase()
+            .includes(normalizedSearch);
+        return matchesType && matchesSearch;
+      }),
+    );
   }, [search, selectedType]);
+
+  const selectedVehicle =
+    typeof vehicleId === "string"
+      ? vehicles.find((vehicle) => vehicle.id === vehicleId)
+      : undefined;
+
+  const returnToCatalog = () => {
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+
+    router.replace("/");
+  };
+
+  if (selectedVehicle) {
+    return (
+      <View style={styles.container}>
+        <Pressable
+          accessibilityRole="button"
+          onPress={returnToCatalog}
+          style={styles.backButton}
+        >
+          <Text style={styles.backButtonText}>‹ Kembali ke katalog</Text>
+        </Pressable>
+        <Text style={styles.title}>{selectedVehicle.name}</Text>
+        <Text style={styles.subtitle}>{selectedVehicle.brand}</Text>
+        <View style={styles.card}>
+          <Image
+            source={{ uri: selectedVehicle.imageUrl }}
+            style={styles.cardImage}
+          />
+          <View style={styles.cardContent}>
+            <Text style={styles.typeTag}>{selectedVehicle.type}</Text>
+            <Text style={styles.description}>
+              {selectedVehicle.description}
+            </Text>
+            <Text style={styles.price}>
+              {formatRupiah(selectedVehicle.price)}
+            </Text>
+          </View>
+        </View>
+      </View>
+    );
+  }
 
   const renderVehicle = ({ item }: { item: Vehicle }) => (
     <View style={styles.card}>
@@ -143,13 +193,10 @@ export default function DealerKatalog() {
         <Pressable
           style={styles.detailButton}
           onPress={() =>
-            Alert.alert(
-              item.name,
-              `${item.description}\n\nHarga mulai: ${formatRupiah(item.price)}`,
-            )
+            router.push({ pathname: "/", params: { vehicleId: item.id } })
           }
         >
-          <Text style={styles.detailButtonText}>Lihat spesifikasi</Text>
+          <Text style={styles.detailButtonText}>Lihat detail</Text>
         </Pressable>
       </View>
     </View>
@@ -157,6 +204,7 @@ export default function DealerKatalog() {
 
   return (
     <View style={styles.container}>
+      <Text style={styles.eyebrow}>DEALER KENDARAAN</Text>
       <Text style={styles.title}>Hantu Car</Text>
       <Text style={styles.subtitle}>Katalog motor dan mobil pilihan</Text>
 
@@ -190,6 +238,10 @@ export default function DealerKatalog() {
         ))}
       </View>
 
+      <Text style={styles.resultCount}>
+        {filteredVehicles.length} kendaraan tersedia
+      </Text>
+
       <FlatList
         data={filteredVehicles}
         keyExtractor={(item) => item.id}
@@ -207,9 +259,19 @@ export default function DealerKatalog() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    alignSelf: "center",
     backgroundColor: "#f8fafc",
     paddingTop: 56,
     paddingHorizontal: 16,
+    width: "100%",
+    maxWidth: 760,
+  },
+  eyebrow: {
+    color: "#2563eb",
+    fontSize: 12,
+    fontWeight: "800",
+    letterSpacing: 1.4,
+    marginBottom: 6,
   },
   title: {
     color: "#0f172a",
@@ -256,7 +318,13 @@ const styles = StyleSheet.create({
     color: "#ffffff",
   },
   list: {
-    paddingBottom: 24,
+    paddingBottom: 96,
+  },
+  resultCount: {
+    color: "#64748b",
+    fontSize: 13,
+    fontWeight: "600",
+    marginBottom: 10,
   },
   card: {
     backgroundColor: "#ffffff",
@@ -328,6 +396,16 @@ const styles = StyleSheet.create({
   detailButtonText: {
     color: "#ffffff",
     fontSize: 14,
+    fontWeight: "700",
+  },
+  backButton: {
+    alignSelf: "flex-start",
+    marginBottom: 16,
+    paddingVertical: 8,
+  },
+  backButtonText: {
+    color: "#2563eb",
+    fontSize: 16,
     fontWeight: "700",
   },
   emptyText: {
