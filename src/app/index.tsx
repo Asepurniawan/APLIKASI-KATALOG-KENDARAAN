@@ -31,7 +31,7 @@ const vehicles: Vehicle[] = [
     price: 37900000,
     description: "Motor sport full-fairing untuk penggunaan hari.",
     imageUrl:
-      "https://commons.wikimedia.org/wiki/Special:FilePath/2021_Honda_CBR150R_ABS.jpg?width=1200",
+      "https://otomotifnet.gridoto.com/read/231124288/first-ride-all-new-honda-cbr150r-ini-daftar-kelebihannya",
   },
   {
     id: "m2",
