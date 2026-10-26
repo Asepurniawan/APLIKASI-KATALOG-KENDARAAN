@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import {
   FlatList,
@@ -21,6 +21,60 @@ interface Vehicle {
   readonly description: string;
   readonly imageUrl: string;
 }
+
+interface ExternalVehicle {
+  readonly id: number;
+  readonly title: string;
+  readonly brand?: string;
+  readonly category: "vehicle" | "motorcycle";
+  readonly price: number;
+  readonly description: string;
+  readonly images?: readonly string[];
+  readonly thumbnail: string;
+}
+
+interface ExternalVehicleResponse {
+  readonly products: ExternalVehicle[];
+}
+
+const EXTERNAL_VEHICLE_APIS = [
+  "https://dummyjson.com/products/category/vehicle?limit=0",
+  "https://dummyjson.com/products/category/motorcycle?limit=0",
+] as const;
+const USD_TO_IDR_DEMO = 16000;
+
+const validateApiResponse = (response: Response): Promise<Response> =>
+  response.ok
+    ? Promise.resolve(response)
+    : Promise.reject(
+        new Error(`API gagal merespons dengan status ${response.status}.`),
+      );
+
+const fetchExternalVehicles = async (): Promise<Vehicle[]> => {
+  const responses = await Promise.all(
+    EXTERNAL_VEHICLE_APIS.map((url) =>
+      fetch(url).then(validateApiResponse),
+    ),
+  );
+  const categoryResults = await Promise.all(
+    responses.map(
+      (response) =>
+        response.json() as Promise<ExternalVehicleResponse>,
+    ),
+  );
+
+  return categoryResults.flatMap(({ products }) =>
+    products.map((product) => ({
+      id: `external-${product.id}`,
+      name: product.title,
+      brand: product.brand || "Merek tidak diketahui",
+      type: product.category === "motorcycle" ? "Motor" : "Mobil",
+      price: Math.round(product.price * USD_TO_IDR_DEMO),
+      description: product.description,
+      imageUrl: product.images?.find(Boolean) || product.thumbnail,
+    })),
+  );
+};
 
 const vehicles: Vehicle[] = [
   {
@@ -110,32 +164,63 @@ const formatRupiah = (value: number) => `Rp ${value.toLocaleString("id-ID")}`;
 export default function DealerKatalog() {
   const router = useRouter();
   const { vehicleId } = useLocalSearchParams<{ vehicleId?: string }>();
+  const [catalogVehicles, setCatalogVehicles] = useState(vehicles);
   const [selectedType, setSelectedType] = useState<VehicleType | "Semua">(
     "Semua",
   );
   const [search, setSearch] = useState("");
-  const [filteredVehicles, setFilteredVehicles] = useState(vehicles);
-
-  useEffect(() => {
-    const normalizedSearch = search.trim().toLowerCase();
-    setFilteredVehicles(
-      vehicles.filter((vehicle) => {
-        const matchesType =
-          selectedType === "Semua" || vehicle.type === selectedType;
-        const matchesSearch =
-          !normalizedSearch ||
-          `${vehicle.brand} ${vehicle.name}`
-            .toLowerCase()
-            .includes(normalizedSearch);
-        return matchesType && matchesSearch;
-      }),
-    );
-  }, [search, selectedType]);
+  const [isLoadingExternal, setIsLoadingExternal] = useState(false);
+  const [apiError, setApiError] = useState("");
+  const [loadedExternalCounts, setLoadedExternalCounts] = useState<{
+    cars: number;
+    motorcycles: number;
+  } | null>(null);
+  const normalizedSearch = search.trim().toLowerCase();
+  const filteredVehicles = catalogVehicles.filter((vehicle) => {
+    const matchesType =
+      selectedType === "Semua" || vehicle.type === selectedType;
+    const matchesSearch =
+      !normalizedSearch ||
+      `${vehicle.brand} ${vehicle.name}`
+        .toLowerCase()
+        .includes(normalizedSearch);
+    return matchesType && matchesSearch;
+  });
 
   const selectedVehicle =
     typeof vehicleId === "string"
-      ? vehicles.find((vehicle) => vehicle.id === vehicleId)
+      ? catalogVehicles.find((vehicle) => vehicle.id === vehicleId)
       : undefined;
+
+  const loadExternalVehicles = () => {
+    setIsLoadingExternal(true);
+    setApiError("");
+
+    fetchExternalVehicles()
+      .then((externalVehicles) => {
+        setCatalogVehicles((currentVehicles) => [
+          ...currentVehicles.filter(
+            (vehicle) => !vehicle.id.startsWith("external-"),
+          ),
+          ...externalVehicles,
+        ]);
+        setLoadedExternalCounts({
+          cars: externalVehicles.filter((vehicle) => vehicle.type === "Mobil")
+            .length,
+          motorcycles: externalVehicles.filter(
+            (vehicle) => vehicle.type === "Motor",
+          ).length,
+        });
+      })
+      .catch((error: unknown) => {
+        setApiError(
+          error instanceof Error
+            ? error.message
+            : "Terjadi kesalahan saat mengambil data kendaraan.",
+        );
+      })
+      .finally(() => setIsLoadingExternal(false));
+  };
 
   const returnToCatalog = () => {
     if (router.canGoBack()) {
@@ -173,7 +258,15 @@ export default function DealerKatalog() {
             </Text>
           </View>
         </View>
+       <Pressable
+          accessibilityRole="button"
+          onPress={returnToCatalog}
+          style={styles.backButton}
+        >
+          <Text style={styles.backButtonText}>‹ KEMBALI KE DEMO </Text>
+        </Pressable>
       </View>
+      
     );
   }
 
@@ -207,7 +300,6 @@ export default function DealerKatalog() {
       <Text style={styles.eyebrow}>DEALER KENDARAAN</Text>
       <Text style={styles.title}>Hantu Car</Text>
       <Text style={styles.subtitle}>Katalog motor dan mobil pilihan</Text>
-
       <TextInput
         value={search}
         onChangeText={setSearch}
@@ -215,6 +307,26 @@ export default function DealerKatalog() {
         placeholderTextColor="#94a3b8"
         style={styles.searchInput}
       />
+
+      <Pressable
+        accessibilityRole="button"
+        disabled={isLoadingExternal}
+        onPress={loadExternalVehicles}
+        style={styles.apiButton}
+      >
+        <Text style={styles.apiButtonText}>
+          {isLoadingExternal
+            ? "Mengambil data mobil & motor..."
+            : "Muat semua mobil & motor dari API"}
+        </Text>
+      </Pressable>
+      {apiError ? <Text style={styles.errorText}>{apiError}</Text> : null}
+      {loadedExternalCounts ? (
+        <Text style={styles.apiResultText}>
+          {loadedExternalCounts.cars} mobil dan{" "}
+          {loadedExternalCounts.motorcycles} motor dari API berhasil dimuat.
+        </Text>
+      ) : null}
 
       <View style={styles.filterRow}>
         {(["Semua", "Motor", "Mobil"] as const).map((type) => (
@@ -293,6 +405,29 @@ const styles = StyleSheet.create({
     fontSize: 15,
     paddingHorizontal: 14,
     paddingVertical: 12,
+  },
+  apiButton: {
+    alignItems: "center",
+    backgroundColor: "#0f766e",
+    borderRadius: 10,
+    marginTop: 12,
+    paddingVertical: 12,
+  },
+  apiButtonText: {
+    color: "#ffffff",
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  apiResultText: {
+    color: "#0f766e",
+    fontSize: 13,
+    fontWeight: "600",
+    marginTop: 8,
+  },
+  errorText: {
+    color: "#b91c1c",
+    fontSize: 13,
+    marginTop: 8,
   },
   filterRow: {
     flexDirection: "row",
@@ -388,7 +523,7 @@ const styles = StyleSheet.create({
   },
   detailButton: {
     alignItems: "center",
-    backgroundColor: "#2563eb",
+    backgroundColor: "#090909",
     borderRadius: 10,
     marginTop: 14,
     paddingVertical: 12,
@@ -398,19 +533,19 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "700",
   },
-  backButton: {
-    alignSelf: "flex-start",
-    marginBottom: 16,
-    paddingVertical: 8,
-  },
-  backButtonText: {
-    color: "#2563eb",
-    fontSize: 16,
-    fontWeight: "700",
-  },
   emptyText: {
     color: "#64748b",
     paddingTop: 24,
     textAlign: "center",
+  },
+  backButton: {
+    alignSelf: "center",
+    marginBottom: 16,
+    paddingVertical: 8,
+  },
+  backButtonText: {
+    color: "#1058f2",
+    fontSize: 16,
+    fontWeight: "700",
   },
 });
