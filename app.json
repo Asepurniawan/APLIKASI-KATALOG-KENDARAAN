@@ -33,7 +33,14 @@
           "imageWidth": 76
         }
       ],
+<<<<<<< HEAD
       "expo-secure-store"
+=======
+      "expo-font",
+      "expo-image",
+      "expo-status-bar",
+      "expo-web-browser"
+>>>>>>> 7dfce7342e7f3ef2a836ac2d52e20836755124e4
     ],
     "experiments": {
       "typedRoutes": true,
