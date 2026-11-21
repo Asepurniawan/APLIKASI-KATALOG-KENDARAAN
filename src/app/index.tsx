@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import {
   ActivityIndicator,
@@ -13,6 +13,7 @@ import {
 } from "react-native";
 
 import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/lib/supabase";
 
 type VehicleType = "Motor" | "Mobil";
 
@@ -26,143 +27,6 @@ interface Vehicle {
   readonly imageUrl: string;
 }
 
-interface ExternalVehicle {
-  readonly id: number;
-  readonly title: string;
-  readonly brand?: string;
-  readonly category: "vehicle" | "motorcycle";
-  readonly price: number;
-  readonly description: string;
-  readonly images?: readonly string[];
-  readonly thumbnail: string;
-}
-
-interface ExternalVehicleResponse {
-  readonly products: ExternalVehicle[];
-}
-
-const EXTERNAL_VEHICLE_APIS = [
-  "https://dummyjson.com/products/category/vehicle?limit=0",
-  "https://dummyjson.com/products/category/motorcycle?limit=0",
-] as const;
-const USD_TO_IDR_DEMO = 16000;
-
-const validateApiResponse = (response: Response): Promise<Response> =>
-  response.ok
-    ? Promise.resolve(response)
-    : Promise.reject(
-        new Error(`API gagal merespons dengan status ${response.status}.`),
-      );
-
-const fetchExternalVehicles = async (): Promise<Vehicle[]> => {
-  const responses = await Promise.all(
-    EXTERNAL_VEHICLE_APIS.map((url) =>
-      fetch(url).then(validateApiResponse),
-    ),
-  );
-  const categoryResults = await Promise.all(
-    responses.map(
-      (response) =>
-        response.json() as Promise<ExternalVehicleResponse>,
-    ),
-  );
-
-  return categoryResults.flatMap(({ products }) =>
-    products.map((product) => ({
-      id: `external-${product.id}`,
-      name: product.title,
-      brand: product.brand || "Merek tidak diketahui",
-      type: product.category === "motorcycle" ? "Motor" : "Mobil",
-      price: Math.round(product.price * USD_TO_IDR_DEMO),
-      description: product.description,
-      imageUrl: product.images?.find(Boolean) || product.thumbnail,
-    })),
-  );
-};
-
-const vehicles: Vehicle[] = [
-  {
-    id: "m1",
-    name: "Honda CBR150R",
-    brand: "Honda",
-    type: "Motor",
-    price: 37900000,
-    description: "Motor sport full-fairing untuk penggunaan hari.",
-    imageUrl:
-      "https://otomotifnet.gridoto.com/read/231124288/first-ride-all-new-honda-cbr150r-ini-daftar-kelebihannya",
-  },
-  {
-    id: "m2",
-    name: "Yamaha NMAX",
-    brand: "Yamaha",
-    type: "Motor",
-    price: 32700000,
-    description: "Skuter premium dengan posisi berkendara yang santai.",
-    imageUrl:
-      "https://commons.wikimedia.org/wiki/Special:FilePath/2020_Yamaha_NMAX_155_ABS_%2820200810%29_01.jpg?width=1200",
-  },
-  {
-    id: "m3",
-    name: "Kawasaki Ninja 250",
-    brand: "Kawasaki",
-    type: "Motor",
-    price: 66000000,
-    description: "Motor sport fairing dengan karakter berkendara sporty.",
-    imageUrl:
-      "https://commons.wikimedia.org/wiki/Special:FilePath/Kawasaki_Ninja250.JPG?width=1200",
-  },
-  {
-    id: "m4",
-    name: "Vespa Primavera",
-    brand: "Vespa",
-    type: "Motor",
-    price: 53500000,
-    description: "Skuter bergaya klasik dengan sentuhan modern.",
-    imageUrl:
-      "https://commons.wikimedia.org/wiki/Special:FilePath/08-2024_Vespa_Primavera_Alter-Markt_Potsdam.jpg?width=1200",
-  },
-  {
-    id: "c1",
-    name: "Honda Civic",
-    brand: "Honda",
-    type: "Mobil",
-    price: 699000000,
-    description: "Sedan modern dengan desain tegas dan kabin nyaman.",
-    imageUrl:
-      "https://images.unsplash.com/photo-1552519507-da3b142c6e3d?auto=format&fit=crop&w=1200&q=85",
-  },
-  {
-    id: "c2",
-    name: "Toyota GR Supra",
-    brand: "Toyota",
-    type: "Mobil",
-    price: 2200000000,
-    description: "Sport coupe dengan fokus pada performa.",
-    imageUrl:
-      "https://images.unsplash.com/photo-1614200187524-dc4b892acf16?auto=format&fit=crop&w=1200&q=85",
-  },
-  {
-    id: "c3",
-    name: "Mitsubishi Pajero Sport",
-    brand: "Mitsubishi",
-    type: "Mobil",
-    price: 570000000,
-    description: "SUV berpostur tinggi untuk keluarga dan perjalanan jauh.",
-    imageUrl:
-      "https://images.unsplash.com/photo-1519641471654-76ce0107ad1b?auto=format&fit=crop&w=1200&q=85",
-  },
-  {
-    id: "c4",
-    name: "BMW 3 Series",
-    brand: "BMW",
-    type: "Mobil",
-    price: 1000000000,
-    description: "Sedan premium dengan fitur kenyamanan modern.",
-    imageUrl:
-      "https://images.unsplash.com/photo-1555215695-3004980ad54e?auto=format&fit=crop&w=1200&q=85",
-  },
-];
-
 const formatRupiah = (value: number) => `Rp ${value.toLocaleString("id-ID")}`;
 
 export default function DealerKatalog() {
@@ -170,62 +34,86 @@ export default function DealerKatalog() {
   const { user, signOut } = useAuth();
   const [isSigningOut, setIsSigningOut] = useState(false);
   const { vehicleId } = useLocalSearchParams<{ vehicleId?: string }>();
-  const [catalogVehicles, setCatalogVehicles] = useState(vehicles);
+  const [catalogVehicles, setCatalogVehicles] = useState<Vehicle[]>([]);
   const [selectedType, setSelectedType] = useState<VehicleType | "Semua">(
     "Semua",
   );
   const [search, setSearch] = useState("");
-  const [isLoadingExternal, setIsLoadingExternal] = useState(false);
+  const [isLoadingVehicles, setIsLoadingVehicles] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [apiError, setApiError] = useState("");
-  const [loadedExternalCounts, setLoadedExternalCounts] = useState<{
-    cars: number;
-    motorcycles: number;
-  } | null>(null);
-  const normalizedSearch = search.trim().toLowerCase();
-  const filteredVehicles = catalogVehicles.filter((vehicle) => {
-    const matchesType =
-      selectedType === "Semua" || vehicle.type === selectedType;
-    const matchesSearch =
-      !normalizedSearch ||
-      `${vehicle.brand} ${vehicle.name}`
-        .toLowerCase()
-        .includes(normalizedSearch);
-    return matchesType && matchesSearch;
-  });
+  const [totalVehicles, setTotalVehicles] = useState(0);
+  const PAGE_SIZE = 40;
 
   const selectedVehicle =
     typeof vehicleId === "string"
       ? catalogVehicles.find((vehicle) => vehicle.id === vehicleId)
       : undefined;
 
-  const loadExternalVehicles = () => {
-    setIsLoadingExternal(true);
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      loadVehicles(true);
+    }, 250);
+
+    return () => clearTimeout(timer);
+  }, [search, selectedType]);
+
+  const loadVehicles = async (reset: boolean) => {
+    const offset = reset ? 0 : catalogVehicles.length;
+    if (!reset && (isLoadingMore || offset >= totalVehicles)) return;
+
+    reset ? setIsLoadingVehicles(true) : setIsLoadingMore(true);
     setApiError("");
 
-    fetchExternalVehicles()
-      .then((externalVehicles) => {
-        setCatalogVehicles((currentVehicles) => [
-          ...currentVehicles.filter(
-            (vehicle) => !vehicle.id.startsWith("external-"),
-          ),
-          ...externalVehicles,
-        ]);
-        setLoadedExternalCounts({
-          cars: externalVehicles.filter((vehicle) => vehicle.type === "Mobil")
-            .length,
-          motorcycles: externalVehicles.filter(
-            (vehicle) => vehicle.type === "Motor",
-          ).length,
-        });
-      })
-      .catch((error: unknown) => {
-        setApiError(
-          error instanceof Error
-            ? error.message
-            : "Terjadi kesalahan saat mengambil data kendaraan.",
+    try {
+      let query = supabase
+        .from("vehicles")
+        .select(
+          "id,name,brand,vehicle_type,price,description,image_url",
+          { count: "exact" },
+        )
+        .order("external_id", { ascending: true })
+        .range(offset, offset + PAGE_SIZE - 1);
+
+      if (selectedType !== "Semua") {
+        query = query.eq("vehicle_type", selectedType);
+      }
+
+      const normalizedSearch = search.trim();
+      if (normalizedSearch) {
+        query = query.or(
+          `name.ilike.%${normalizedSearch}%,brand.ilike.%${normalizedSearch}%`,
         );
-      })
-      .finally(() => setIsLoadingExternal(false));
+      }
+
+      const { data, error, count } = await query;
+      if (error) throw error;
+
+      const rows = (data ?? []).map((row) => ({
+        id: row.id,
+        name: row.name,
+        brand: row.brand,
+        type: row.vehicle_type as VehicleType,
+        price: Number(row.price),
+        description: row.description,
+        imageUrl: row.image_url || "",
+      }));
+
+      setCatalogVehicles((current) => (reset ? rows : [...current, ...rows]));
+      setTotalVehicles(count ?? 0);
+    } catch (error) {
+      const detail =
+        error && typeof error === "object" && "message" in error
+          ? String((error as { message: unknown }).message)
+          : "";
+      setApiError(
+        detail
+          ? `Gagal mengambil data: ${detail}`
+          : "Terjadi kesalahan saat mengambil data kendaraan.",
+      );
+    } finally {
+      reset ? setIsLoadingVehicles(false) : setIsLoadingMore(false);
+    }
   };
 
   const returnToCatalog = () => {
@@ -354,25 +242,7 @@ export default function DealerKatalog() {
         style={styles.searchInput}
       />
 
-      <Pressable
-        accessibilityRole="button"
-        disabled={isLoadingExternal}
-        onPress={loadExternalVehicles}
-        style={styles.apiButton}
-      >
-        <Text style={styles.apiButtonText}>
-          {isLoadingExternal
-            ? "Mengambil data mobil & motor..."
-            : "Muat semua mobil & motor dari API"}
-        </Text>
-      </Pressable>
       {apiError ? <Text style={styles.errorText}>{apiError}</Text> : null}
-      {loadedExternalCounts ? (
-        <Text style={styles.apiResultText}>
-          {loadedExternalCounts.cars} mobil dan{" "}
-          {loadedExternalCounts.motorcycles} motor dari API berhasil dimuat.
-        </Text>
-      ) : null}
 
       <View style={styles.filterRow}>
         {(["Semua", "Motor", "Mobil"] as const).map((type) => (
@@ -397,17 +267,34 @@ export default function DealerKatalog() {
       </View>
 
       <Text style={styles.resultCount}>
-        {filteredVehicles.length} kendaraan tersedia
+        {isLoadingVehicles
+          ? "Memuat kendaraan..."
+          : `${totalVehicles.toLocaleString("id-ID")} kendaraan tersedia`}
       </Text>
 
       <FlatList
-        data={filteredVehicles}
+        data={catalogVehicles}
         keyExtractor={(item) => item.id}
         renderItem={renderVehicle}
         contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
+        onEndReached={() => loadVehicles(false)}
+        onEndReachedThreshold={0.4}
         ListEmptyComponent={
-          <Text style={styles.emptyText}>Kendaraan tidak ditemukan.</Text>
+          isLoadingVehicles ? (
+            <ActivityIndicator color="#2563eb" size="large" style={styles.loading} />
+          ) : (
+            <Text style={styles.emptyText}>Kendaraan tidak ditemukan.</Text>
+          )
+        }
+        ListFooterComponent={
+          isLoadingMore ? (
+            <ActivityIndicator
+              color="#2563eb"
+              size="small"
+              style={styles.loadingMore}
+            />
+          ) : null
         }
       />
     </View>
@@ -542,6 +429,12 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "600",
     marginBottom: 10,
+  },
+  loading: {
+    marginTop: 32,
+  },
+  loadingMore: {
+    marginBottom: 24,
   },
   card: {
     backgroundColor: "#ffffff",
